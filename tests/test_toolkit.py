@@ -9,6 +9,7 @@
   7. all three output formats round-trip (netCDF, arrays, csv) and the manifest records the config
   8. gap filling respects max_steps and never touches the target
   9. a full 995-basin daily build with the toolkit's QC (nothing crashes, dropped basins are the expected ones)
+ 10. the state selector, the variables() table and every explore plot
 
 usage: python tests/test_toolkit.py /path/to/Urban-CAMELS        (or set UCAMELS_DATA)
 Takes about 3 minutes with 4 to 8 CPU cores and 16 GB of memory; output goes to a temporary folder."""
@@ -231,6 +232,31 @@ check(all_nan_target == 86, f'9. {all_nan_target} basins have no daily streamflo
 cfg_drop = dict(cfg_all, qc=dict(max_target_missing_pct=0, drop_if_inputs_missing=True))
 tb, _, rb = up.build(cfg_drop, up.select_basins(dict(preset='all'), verbose=False))
 check(len(tb) == 247 and (~rb.kept).sum() == 748, f'9. max_target_missing_pct=0 keeps exactly the 247 complete basins ({len(tb)})')
+
+# ---------------------------------------------------------------- 10. states, variables table, explore plots
+pa = up.select_basins(dict(states=['PA']), verbose=False)
+check(len(pa) == int((cat.state == 'PA').sum()) and len(pa) > 0 and all(cat.loc[pa, 'state'] == 'PA'),
+      f'10. states=[PA] selects the {len(pa)} Pennsylvania basins')
+two = up.select_basins(dict(states='pa, wa'.split(', '), preset='benchmark_247'), verbose=False)
+check(set(cat.loc[two, 'state']) <= {'PA', 'WA'} and len(two) == int((cat.state.isin(['PA', 'WA']) & cat.preset_benchmark_247).sum()),
+      '10. states combine with the other selectors (lower case accepted)')
+vt = up.variables()
+check(sum(len(s['vars']) for s in up.PRODUCTS.values()) == int((vt.group == 'forcing').sum()) and
+      int((vt.group == 'PET').sum()) == sum(len(v[2]) for v in up.PET.values()) and set(vt.group) == {'forcing', 'PET', 'annual attribute', 'target'},
+      f'10. variables() lists every product variable, PET method, annual attribute and target ({len(vt)} rows)')
+import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
+sub = dict(list(tabs.items())[:6])
+try:
+    figs = [up.plot_map(basins).figure, up.plot_map(color='megaregion').figure, up.plot_timeseries(sub, period=('2020-10-01', '2021-09-30')),
+            up.plot_monthly(sub), up.plot_annual(sub, ['daymet__prcp', 'streamflow_mm', 'dyn__imperv']),
+            up.plot_correlation(sub, ['daymet__prcp', 'daymet__tmax', 'pet__daymet__pet_pt', 'streamflow_mm'], freq='MS'),
+            up.plot_scatter(sub, 'daymet__prcp', 'streamflow_mm', freq='W', log=True)]
+    check(len(figs) == 7, '10. all explore plots draw (map, time series, monthly, annual, correlation, scatter)')
+except Exception as e:
+    check(False, f'10. explore plots: {type(e).__name__}: {e}')
+plt.close('all')
+c = up.correlation(sub, ['daymet__prcp', 'streamflow_mm'], freq='MS')
+check(c.shape == (2, 2) and np.allclose(np.diag(c), 1) and -1 <= c.iloc[0, 1] <= 1, f'10. monthly correlation P-Q = {c.iloc[0, 1]:.2f}')
 
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\n{n_pass} passed, {n_fail} failed')

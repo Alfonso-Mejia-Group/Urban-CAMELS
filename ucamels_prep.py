@@ -29,7 +29,7 @@ Conventions (match the dataset):
 """
 from __future__ import annotations
 
-import json, os, time, warnings
+import json, os, re, time, warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -149,9 +149,10 @@ def select_basins(sel: dict, verbose: bool = True) -> list[str]:
        preset: 'all' | 'benchmark_247'          start set
        ids / id_file: explicit STAIDs (list, or a text/CSV file with one STAID per line or a STAID column)
        completeness: {'resolution': 'daily'|'hourly'|'subhourly', 'window': 'WY2004-2025', 'min_pct': 90}
+       states: two-letter codes, e.g. ['PA'] or ['PA', 'NJ', 'NY']
        area_km2: (min, max); impervious_pct: (min, max); megaregions: [...]; exclude_flags: [...]; exclude: [...]"""
-    known = {'preset', 'ids', 'id_file', 'completeness', 'area_km2', 'impervious_pct', 'megaregions', 'exclude_flags',
-             'exclude'}
+    known = {'preset', 'ids', 'id_file', 'completeness', 'states', 'area_km2', 'impervious_pct', 'megaregions',
+             'exclude_flags', 'exclude'}
     if set(sel) - known:
         raise ValueError(f'unknown basin selection keys {sorted(set(sel) - known)}; available {sorted(known)}')
     cat = load_catalog().set_index('STAID')
@@ -180,6 +181,12 @@ def select_basins(sel: dict, verbose: bool = True) -> list[str]:
             raise ValueError(f'window {c["window"]!r} not tabulated; available: {list(cv.columns)}')
         keep &= cv[c['window']].reindex(cat.index).fillna(0) >= c.get('min_pct', 100) - 1e-9
         steps.append((f'{c.get("resolution", "daily")} completeness >= {c.get("min_pct", 100)} % over {c["window"]}', int(keep.sum())))
+    if sel.get('states'):
+        st = [x.strip().upper() for x in ([sel['states']] if isinstance(sel['states'], str) else sel['states'])]
+        unknown = sorted(set(st) - set(cat.state))
+        if unknown:
+            warnings.warn(f'no Urban-CAMELS basins in {unknown}; states with basins: {sorted(cat.state.unique())}')
+        keep &= cat.state.isin(st); steps.append((f'states {", ".join(st)}', int(keep.sum())))
     if sel.get('area_km2'):
         lo, hi = sel['area_km2']; keep &= cat.area_km2.between(lo, hi); steps.append((f'area {lo}-{hi} km2', int(keep.sum())))
     if sel.get('impervious_pct'):
@@ -791,3 +798,328 @@ def describe_products():
     print('dynamic attributes: ' + ', '.join(f'{k} [{v[2]}]' for k, v in DYNAMIC.items()))
     for g, c in STATIC_GROUPS.items():
         print(f'static {g}: {", ".join(c)}')
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# what can be chosen: one table of every variable, its unit, source and the time steps it can be used at
+# ------------------------------------------------------------------------------------------------------------------
+SOURCE = {'daymet': ('Daymet v4', '1 km', '1989-10 to 2025-09'),
+          'gridmet': ('gridMET', '4 km', '1989-10 to 2025-09'),
+          'nldas_daily': ('NLDAS-2, summed over the UTC day', '12.5 km', '1989-10 to 2025-09'),
+          'aorc': ('AORC v1.1', '1 km', '1989-10 to 2025-09'),
+          'nldas_hourly': ('NLDAS-2', '12.5 km', '1989-10 to 2025-09'),
+          'mrms': ('MRMS radar (2-5 min, averaged to the step)', '1 km', '2002 to 2025-09, gap 2012-01 to 2014-10')}
+VAR_DESC = {'prcp': 'precipitation', 'pr': 'precipitation', 'tmax': 'maximum air temperature',
+            'tmin': 'minimum air temperature', 'tmean': 'mean air temperature', 'tmmx_C': 'maximum air temperature',
+            'tmmn_C': 'minimum air temperature', 'tmean_C': 'mean air temperature', 'tair': 'air temperature',
+            'srad': 'shortwave radiation', 'lrad': 'longwave radiation', 'vp': 'vapour pressure',
+            'dayl': 'day length', 'swe': 'snow water equivalent', 'rmin': 'minimum relative humidity',
+            'rmax': 'maximum relative humidity', 'rhmean': 'mean relative humidity', 'vs': 'wind speed',
+            'wind': 'wind speed', 'vpd': 'vapour pressure deficit', 'sph': 'specific humidity',
+            'pet': 'reference evapotranspiration, grass', 'etr': 'reference evapotranspiration, alfalfa',
+            'pres': 'surface pressure', 'potevap': 'potential evaporation (NLDAS-2)',
+            'coverage_frac': 'share of the basin covered by radar data'}
+USABLE = {'D': 'daily', 'H': 'daily, hourly, sub-hourly'}
+DYN_DESC = {'imperv': 'imperviousness', 'class1_urban': 'urban land cover', 'class2_agriculture': 'agricultural land cover',
+            'class3_forest': 'forest land cover', 'class4_grassland': 'grassland land cover',
+            'class5_bare': 'bare land cover', 'class6_water': 'water and wetland land cover',
+            'pop_density': 'population density', 'housing_density': 'housing density'}
+
+
+def variables() -> pd.DataFrame:
+    """Every time-varying input and the target: product, variable, description, unit, native step, the time steps
+    (RESOLUTION) it can be used at, source and period. Use the product and variable names in FORCING / PET."""
+    rows = []
+    for p, s in PRODUCTS.items():
+        src, res, per = SOURCE[p]
+        usable = 'hourly, sub-hourly' if p == 'mrms' else USABLE[s['step']]
+        for v, u in s['vars'].items():
+            rows.append(dict(group='forcing', product=p, variable=v, description=VAR_DESC.get(v, v), unit=u,
+                             native_step='daily' if s['step'] == 'D' else ('2-5 min' if p == 'mrms' else 'hourly'),
+                             usable_at=usable, source=f'{src}, {res}', period=per))
+    for (step, p), (_, _, methods) in PET.items():
+        for m in methods:
+            rows.append(dict(group='PET', product=p, variable=m,
+                             description='potential evapotranspiration, ' + ('Priestley-Taylor' if m == 'pet_pt' else 'Penman-Monteith'),
+                             unit='mm/day' if step == 'D' else 'mm/h', native_step='daily' if step == 'D' else 'hourly',
+                             usable_at='daily' if step == 'D' else 'hourly, sub-hourly',
+                             source=f'computed from {p}', period=SOURCE[p][2]))
+    for k, (f, _, u) in DYNAMIC.items():
+        rows.append(dict(group='annual attribute', product='attributes/annual', variable=k,
+                         description=DYN_DESC[k], unit=u,
+                         native_step='census years' if k == 'housing_density' else 'annual',
+                         usable_at='daily, hourly, sub-hourly', source=f, period='1990-2020' if k == 'housing_density' else '1989-2025'))
+    for step, (f, _, c) in TARGET.items():
+        rows.append(dict(group='target', product='streamflow', variable=c,
+                         description='observed streamflow (USGS NWIS)', unit='mm per step, mm/h, m3/s or ft3/s',
+                         native_step={'D': 'daily', 'H': 'hourly', 'S': '5-60 min'}[step],
+                         usable_at={'D': 'daily', 'H': 'hourly', 'S': 'sub-hourly'}[step], source='USGS NWIS',
+                         period='1989-10 to 2025-09'))
+    return pd.DataFrame(rows)
+
+
+def static_groups() -> pd.DataFrame:
+    """The static attribute groups and their columns (STATIC['groups'] in the notebook)."""
+    return pd.DataFrame([dict(group=g, n=len(c), columns=', '.join(c)) for g, c in STATIC_GROUPS.items()]).set_index('group')
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# explore: maps, time series, monthly regime, annual trends and correlations (needs matplotlib)
+# ------------------------------------------------------------------------------------------------------------------
+SERIF = ['Times New Roman', 'Times', 'Nimbus Roman', 'STIXGeneral', 'DejaVu Serif']     # first one installed is used
+PALETTE = ['#0072B2', '#D55E00', '#009E73', '#CC79A7', '#E69F00', '#56B4E9', '#000000', '#F0E442']
+
+
+def _plt():
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as e:
+        raise ImportError('the explore functions need matplotlib: pip install matplotlib') from e
+    plt.rcParams.update({'font.family': 'serif', 'font.serif': SERIF, 'mathtext.fontset': 'stix', 'font.size': 12.5,
+                         'axes.spines.top': False, 'axes.spines.right': False, 'axes.titleweight': 'bold',
+                         'axes.titlesize': 13.5, 'axes.titlelocation': 'left', 'axes.labelsize': 12.5})
+    import logging
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)     # quiet when Times New Roman is absent
+    return plt
+
+
+UNIT_TEXT = {'degC': '°C', 'W/m2': 'W/m²', 'persons/km2': 'persons/km²', 'units/km2': 'units/km²'}
+
+
+def _unit(u: str) -> str:
+    return UNIT_TEXT.get(u, u)
+
+
+def _step_sec(tables: dict) -> int:
+    """Time step of the built tables in seconds."""
+    ix = next(iter(tables.values())).index
+    return int((ix[1] - ix[0]).total_seconds()) if len(ix) > 1 else 86400
+
+
+def _short(col: str, sec: int = 86400) -> str:
+    """Two-line axis label: 'daymet__tmax' -> 'daymet tmax\n(°C)'."""
+    full = _label(col, sec)
+    name, unit = (full.rsplit(' (', 1) + [''])[:2]
+    if col.startswith('streamflow_'):
+        name = 'Streamflow'
+    elif not col.startswith(('pet__', 'dyn__')):
+        name = col.replace('__', ' ')
+    return f'{name}\n({unit}' if unit else name
+
+
+def _basin_name(sid: str) -> str:
+    """'PEACHTREE CREEK AT ATLANTA, GA' -> 'Peachtree Creek at Atlanta, GA'."""
+    cat = load_catalog().set_index('STAID')
+    n = str(cat.loc[sid, 'name']).title()
+    for w in (' At ', ' Near ', ' Nr ', ' Of ', ' And ', ' In ', ' On ', ' Above ', ' Below ', ' The '):
+        n = n.replace(w, w.lower())
+    n = re.sub(r'(\d)(St|Nd|Rd|Th)\b', lambda m: m.group(1) + m.group(2).lower(), n)
+    head, _, tail = n.rpartition(', ')
+    return f'{head}, {tail.upper()}' if head and len(tail) == 2 else n
+
+
+def _label(col: str, sec: int = 86400) -> str:
+    """Readable name of a table column at a time step of `sec` seconds: 'daymet__prcp' -> 'daymet precipitation
+    (mm/day)'. Per-step depths are written as mm/day, mm/h or mm per N min."""
+    per_step = 'mm/day' if sec >= 86400 else ('mm/h' if sec == 3600 else f'mm per {sec // 60} min')
+    if col.startswith('streamflow_'):
+        u = col[len('streamflow_'):].replace('per', '/')
+        return f'Streamflow ({per_step if u == "mm" else u})'
+    parts = col.split('__')
+    if parts[0] == 'dyn':
+        return f'{DYN_DESC[parts[1]]} ({_unit(DYNAMIC[parts[1]][2])})'
+    if parts[0] == 'pet':
+        return f'PET {parts[1]} {"PT" if parts[2] == "pet_pt" else "PM"} ({"mm/day" if sec >= 86400 else "mm/h"})'
+    p, v = parts
+    return f'{p} {VAR_DESC.get(v, v)} ({_unit(PRODUCTS[p]["vars"].get(v, ""))})'
+
+
+def _aggregate(t: pd.DataFrame, freq: str | None) -> pd.DataFrame:
+    """Mean of every column over each period of `freq` (e.g. 'D', 'W', 'MS'); means keep fluxes and states comparable
+    across periods with missing steps. None keeps the built time step."""
+    if not freq:
+        return t
+    g = t.resample(freq)
+    return g.mean().where(g.count() >= 0.8 * g.size().max())
+
+
+def _water_year(idx: pd.DatetimeIndex) -> np.ndarray:
+    return idx.year + (idx.month >= 10)
+
+
+def plot_map(basins: list[str] | None = None, color: str = 'IMPNLCD06', ax=None, title: str | None = None):
+    """Map of the basins (all 995 if None), coloured by a catalog column: 'IMPNLCD06' (imperviousness 2006, %),
+    'area_km2', or 'megaregion'. State outlines from catalog/us_states_outline.csv."""
+    plt = _plt()
+    cat = load_catalog().set_index('STAID')
+    sel = cat.loc[basins] if basins is not None else cat
+    if ax is None:
+        _, ax = plt.subplots(figsize=(11, 6))
+    o = pd.read_csv(TOOLKIT / 'catalog' / 'us_states_outline.csv')
+    ax.plot(o.lon, o.lat, color='#9a9a9a', lw=0.6, zorder=1)
+    ax.scatter(cat.lon, cat.lat, s=10, color='#d9d9d9', zorder=2, label=None)
+    if color == 'megaregion':
+        regs = sel.megaregion.value_counts().index
+        cmap = plt.get_cmap('tab20')
+        for k, r in enumerate(regs):
+            m = sel.megaregion == r
+            ax.scatter(sel.lon[m], sel.lat[m], s=34, color=cmap(k % 20), edgecolor='black', lw=0.3, zorder=3,
+                       label=f'{r} ({int(m.sum())})')
+        ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), frameon=False, fontsize=11.5, title='Megaregion')
+    else:
+        from matplotlib.colors import LogNorm
+        norm = LogNorm() if color == 'area_km2' else None
+        sc = ax.scatter(sel.lon, sel.lat, c=sel[color], s=34, cmap='Reds' if color != 'area_km2' else 'viridis',
+                        norm=norm, edgecolor='black', lw=0.3, zorder=3)
+        cb = plt.colorbar(sc, ax=ax, shrink=0.75, pad=0.01)
+        cb.set_label({'IMPNLCD06': 'Imperviousness, 2006 (%)', 'area_km2': 'Area (km²)'}.get(color, color))
+    ax.set_xlim(-125.5, -66.5); ax.set_ylim(24, 50); ax.set_aspect(1 / np.cos(np.radians(38)))
+    ax.set_axis_off()
+    ax.set_title(title or f'{len(sel)} Urban-CAMELS basins' + (' (grey: all 995)' if len(sel) < len(cat) else ''))
+    return ax
+
+
+def plot_timeseries(tables: dict, sid: str | None = None, variables: list[str] | None = None,
+                    period: tuple[str, str] | None = None, freq: str | None = None):
+    """One basin: precipitation (bars, top), the target, and up to four other inputs, each in its own panel.
+    variables: table columns (default: every input except annual attributes); period: ('2020-10-01', '2021-09-30');
+    freq: aggregate first ('D', 'W', 'MS'), e.g. to see a long hourly record."""
+    plt = _plt()
+    sid = sid or next(iter(tables))
+    t = tables[sid]
+    t = t.loc[period[0]:period[1]] if period else t
+    t = _aggregate(t, freq)
+    target = [c for c in t.columns if c.startswith('streamflow_')][0]
+    sec = _step_sec({sid: tables[sid]})
+    cols = variables or [c for c in t.columns if c != target and not c.startswith('dyn__')]
+    rain = [c for c in cols if c.split('__')[-1] in ('prcp', 'pr')][:1]
+    other = [c for c in cols if c not in rain][:4]
+    n = 1 + len(rain) + len(other)
+    fig, axes = plt.subplots(n, 1, figsize=(12, 1.0 + 1.6 * n), sharex=True,
+                             gridspec_kw=dict(height_ratios=[1.0] * len(rain) + [1.7] + [0.85] * len(other)))
+    axes = np.atleast_1d(axes); k = 0
+    width = (t.index[1] - t.index[0]) if len(t) > 1 else pd.Timedelta(days=1)
+    if rain:
+        axes[0].bar(t.index, t[rain[0]], width=width, color='#56B4E9', align='edge', lw=0)
+        axes[0].invert_yaxis(); axes[0].set_ylabel(_short(rain[0], sec))
+        k = 1
+    axes[k].plot(t.index, t[target], color='#0072B2', lw=0.9)
+    axes[k].fill_between(t.index, t[target], color='#0072B2', alpha=0.12, lw=0)
+    axes[k].set_ylabel(_short(target, sec))
+    for j, c in enumerate(other):
+        axes[k + 1 + j].plot(t.index, t[c], color=PALETTE[(j + 1) % len(PALETTE)], lw=0.8)
+        axes[k + 1 + j].set_ylabel(_short(c, sec))
+    cat = load_catalog().set_index('STAID')
+    axes[0].set_title(f'{sid} · {_basin_name(sid)} · {cat.loc[sid, "area_km2"]:,.0f} km²')
+    for a in axes:
+        a.grid(alpha=0.25, lw=0.5)
+    axes[-1].set_xlim(t.index[0], t.index[-1] + width)
+    fig.align_ylabels(axes); fig.tight_layout()
+    return fig
+
+
+def plot_monthly(tables: dict, variables: list[str] | None = None):
+    """Mean monthly regime over all built basins: for each variable the median of the basins' monthly means
+    (line) and the 25-75 % range across basins (band), October to September."""
+    plt = _plt()
+    first = next(iter(tables.values()))
+    cols = variables or [c for c in first.columns if not c.startswith('dyn__')]
+    sec = _step_sec(tables)
+    per = {c: pd.DataFrame({s: t[c].groupby(t.index.month).mean() for s, t in tables.items()}) for c in cols}
+    order = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    names = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep']
+    n = len(cols); nc = min(3, n); nr = int(np.ceil(n / nc))
+    fig, axes = plt.subplots(nr, nc, figsize=(4.3 * nc, 3.0 * nr), squeeze=False)
+    for k, c in enumerate(cols):
+        a = axes.flat[k]; d = per[c].reindex(order)
+        x = np.arange(12)
+        a.fill_between(x, d.quantile(0.25, axis=1), d.quantile(0.75, axis=1), color=PALETTE[k % 8], alpha=0.2, lw=0)
+        a.plot(x, d.median(axis=1), color=PALETTE[k % 8], lw=2.2, marker='o', ms=4)
+        a.set_xticks(x, names, fontsize=10.5); a.set_title(_label(c, sec), fontsize=12.5); a.grid(alpha=0.25, lw=0.5)
+    for a in axes.flat[n:]:
+        a.set_visible(False)
+    fig.suptitle(f'Mean monthly regime, {len(tables)} basins (line: median, band: 25-75 % of basins)', x=0.01,
+                 ha='left', fontweight='bold')
+    fig.tight_layout()
+    return fig
+
+
+def plot_annual(tables: dict, variables: list[str] | None = None):
+    """Water-year means over all built basins: median across basins (line), 25-75 % range (band), and the
+    least-squares trend of the median, in units per decade."""
+    plt = _plt()
+    first = next(iter(tables.values()))
+    cols = variables or list(first.columns)
+    sec = _step_sec(tables)
+    n = len(cols); nc = min(3, n); nr = int(np.ceil(n / nc))
+    fig, axes = plt.subplots(nr, nc, figsize=(4.3 * nc, 3.0 * nr), squeeze=False)
+    for k, c in enumerate(cols):
+        a = axes.flat[k]
+        d = pd.DataFrame({s: t[c].groupby(_water_year(t.index)).mean().where(
+            t[c].groupby(_water_year(t.index)).count() >= 0.9 * t[c].groupby(_water_year(t.index)).size()) for s, t in tables.items()})
+        med = d.median(axis=1).dropna()
+        a.fill_between(d.index, d.quantile(0.25, axis=1), d.quantile(0.75, axis=1), color=PALETTE[k % 8], alpha=0.2, lw=0)
+        a.plot(med.index, med.values, color=PALETTE[k % 8], lw=2)
+        if len(med) > 5:
+            b = np.polyfit(med.index, med.values, 1)
+            a.plot(med.index, np.polyval(b, med.index), color='black', lw=1, ls='--')
+            a.text(0.02, 0.95, f'trend {10 * b[0]:+.3g} per decade', transform=a.transAxes, va='top', fontsize=11)
+        a.set_title(_label(c, sec), fontsize=12.5); a.grid(alpha=0.25, lw=0.5); a.set_xlabel('Water year')
+    for a in axes.flat[n:]:
+        a.set_visible(False)
+    fig.suptitle(f'Water-year means, {len(tables)} basins (line: median, band: 25-75 % of basins, dashed: trend)',
+                 x=0.01, ha='left', fontweight='bold')
+    fig.tight_layout()
+    return fig
+
+
+def correlation(tables: dict, variables: list[str] | None = None, freq: str | None = None,
+                method: str = 'spearman') -> pd.DataFrame:
+    """Correlation between variables at the built time step, or after aggregating to `freq` ('D', 'W', 'MS',
+    'YS'). Computed inside each basin, then the median over basins, so differences between basins (climate, size)
+    do not create correlation."""
+    first = next(iter(tables.values()))
+    cols = variables or [c for c in first.columns if not c.startswith('dyn__')]
+    mats = [_aggregate(t[cols], freq).corr(method=method, min_periods=30) for t in tables.values()]
+    return pd.concat(mats).groupby(level=0).median().loc[cols, cols]
+
+
+def plot_correlation(tables: dict, variables: list[str] | None = None, freq: str | None = None,
+                     method: str = 'spearman'):
+    """Heat map of correlation() with the values written in the cells."""
+    plt = _plt()
+    c = correlation(tables, variables, freq, method)
+    sec = _step_sec(tables)                    # means over freq keep the unit of the built step
+    labels = [_label(x, sec).replace(' (', '\n(') for x in c.columns]
+    fig, ax = plt.subplots(figsize=(1.2 + 1.05 * len(c), 0.9 + 0.95 * len(c)))
+    im = ax.imshow(c.values, cmap='RdBu_r', vmin=-1, vmax=1)
+    for i in range(len(c)):
+        for j in range(len(c)):
+            v = c.values[i, j]
+            ax.text(j, i, f'{v:.2f}', ha='center', va='center', fontsize=11, color='white' if abs(v) > 0.6 else 'black')
+    ax.set_xticks(range(len(c)), labels, rotation=45, ha='right', fontsize=10.5)
+    ax.set_yticks(range(len(c)), labels, fontsize=10.5)
+    ax.spines[:].set_visible(False)
+    plt.colorbar(im, ax=ax, shrink=0.8, label=f'{method.title()} correlation')
+    step = {'D': 'daily', 'W': 'weekly', 'MS': 'monthly', 'YS': 'annual'}.get(freq, freq) if freq else 'built time step'
+    ax.set_title(f'{method.title()} correlation at the {step} scale\n(within each basin, median of {len(tables)} basins)')
+    fig.tight_layout()
+    return fig
+
+
+def plot_scatter(tables: dict, x: str, y: str, freq: str | None = None, log: bool = False):
+    """Density of y against x over all basins and steps (hexagonal bins), after optional aggregation to `freq`."""
+    plt = _plt()
+    d = pd.concat([_aggregate(t[[x, y]], freq) for t in tables.values()]).dropna()
+    if log:
+        d = d[(d[x] > 0) & (d[y] > 0)]
+    fig, ax = plt.subplots(figsize=(6.2, 5.2))
+    hb = ax.hexbin(d[x], d[y], gridsize=60, bins='log', cmap='viridis', mincnt=1,
+                   xscale='log' if log else 'linear', yscale='log' if log else 'linear')
+    plt.colorbar(hb, ax=ax, label='steps (log scale)')
+    sec = _step_sec(tables)
+    ax.set_xlabel(_label(x, sec)); ax.set_ylabel(_label(y, sec))
+    r = d[x].corr(d[y], method='spearman')
+    ax.set_title(f'{len(d):,} values, {len(tables)} basins · Spearman {r:.2f}')
+    fig.tight_layout()
+    return fig

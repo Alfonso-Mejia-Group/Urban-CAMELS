@@ -9,11 +9,13 @@ sub-hourly** time step. You choose:
 - the split;
 - the output format.
 
-The toolkit checks, assembles, splits and packs the data.
+The toolkit checks, assembles, splits and packs the data, and draws maps and plots to explore it.
+
+![Workflow of the toolkit](docs/images/workflow.png)
 
 ## Install
 Python 3.9 or later with `pandas`, `numpy` and `xarray` (with `netCDF4` or `scipy`), plus `jupyter` for the notebook
-and `matplotlib` for its optional plot:
+and `matplotlib` for the maps and plots:
 
     pip install pandas numpy xarray netCDF4 matplotlib jupyterlab
 
@@ -28,6 +30,16 @@ Download the Urban-CAMELS archives and unzip them all into one folder. The folde
       attributes/
 
 The toolkit only needs the archives for the products you use, plus `attributes`.
+
+![Layout of the Urban-CAMELS data](docs/images/data_layout.png)
+
+To see every variable you can choose, with its unit, source, period and the time steps it can be used at:
+
+```python
+import ucamels_prep as up
+up.variables()          # 73 rows: forcing, PET, annual attributes and the target
+up.static_groups()      # static attribute groups and their columns
+```
 
 ## Start here
 Open **`Urban_CAMELS_data_prep.ipynb`** from this folder. Set `DATA_ROOT` in the first cell to the data folder (or set
@@ -62,6 +74,29 @@ split = up.make_split(list(tables), CONFIG)
 up.write_package(tables, static, report, split, CONFIG)
 ```
 
+## Explore the data
+After `up.build()`, the notebook draws the dataset you built, at your time step. The same functions work in a script:
+
+| Function | What it shows |
+|---|---|
+| `up.plot_map(basins, color=...)` | the selected basins on a map, coloured by imperviousness, area or megaregion |
+| `up.plot_timeseries(tables, sid, period=...)` | one basin: precipitation, streamflow and the other inputs |
+| `up.plot_monthly(tables)` | the mean seasonal cycle of every variable over all basins |
+| `up.plot_annual(tables)` | water-year means and their trend, including imperviousness and land cover |
+| `up.plot_correlation(tables, freq=...)` | correlation between variables at the built step, or weekly, monthly or annual |
+| `up.plot_scatter(tables, x, y, freq=...)` | two variables against each other over all basins |
+
+Correlations are computed inside each basin and the median over basins is shown, so differences in climate or size
+between basins do not create correlation. The examples below are the 247 benchmark basins at the daily step, and one
+storm at the hourly step with MRMS radar precipitation.
+
+![Map of the selected basins](docs/images/example_map.png)
+![Daily time series of one basin](docs/images/example_timeseries.png)
+![Hourly time series of one storm](docs/images/example_hourly_storm.png)
+![Mean monthly regime](docs/images/example_monthly.png)
+![Water-year means and trends](docs/images/example_annual.png)
+![Correlation between variables](docs/images/example_correlation.png)
+
 ## Files
 | File | Purpose |
 |---|---|
@@ -69,13 +104,15 @@ up.write_package(tables, static, report, split, CONFIG)
 | `ucamels_prep.py` | the toolkit (functions used by the notebook; can also be imported in scripts) |
 | `catalog/basins_995.csv` | per basin: name, state, location, area, imperviousness, megaregion, benchmark preset, data flags |
 | `catalog/coverage_{daily,hourly,subhourly}.csv` | streamflow completeness (%) per basin for 13 water-year windows |
+| `catalog/us_states_outline.csv` | state outlines for the maps (no geopandas needed) |
+| `docs/images/`, `docs/make_readme_figures.py` | the figures of this README and the script that draws them |
 | `tests/test_toolkit.py` | checks against the data files: values at every time step, every basin filter, gap filling, splits, output round-trips, and a full 995-basin daily build. Run `python tests/test_toolkit.py /path/to/Urban-CAMELS` |
 | `tests/run_notebook.py` | runs every cell of the notebook without Jupyter |
 
 ## What the toolkit offers
 | Choice | Options |
 |---|---|
-| Basins | presets `all` (995) and `benchmark_247` (complete daily record WY1990-2025); explicit IDs or a file; a completeness rule (resolution, water-year window, threshold), for example hourly streamflow ≥ 90 % over WY2004-2025; area, imperviousness and megaregion filters; `exclude_flags` |
+| Basins | presets `all` (995) and `benchmark_247` (complete daily record WY1990-2025); explicit IDs or a file; a completeness rule (resolution, water-year window, threshold), for example hourly streamflow ≥ 90 % over WY2004-2025; states (e.g. `states=['PA']`); area, imperviousness and megaregion filters; `exclude_flags` |
 | Time step | `daily` (one row per date), `hourly` (UTC), `subhourly` (UTC; 5, 10, 15 or 30 min); hourly and sub-hourly rows describe the step that starts at the label |
 | Forcing | daily: Daymet, gridMET, NLDAS daily (UTC day), AORC and NLDAS hourly aggregated to the local day. Hourly and sub-hourly: AORC, NLDAS-2 hourly, MRMS radar (2002 onward) |
 | PET | Priestley-Taylor and Penman-Monteith from each forcing product |
