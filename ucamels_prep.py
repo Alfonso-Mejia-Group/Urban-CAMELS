@@ -15,8 +15,7 @@ and dynamic attributes, how to split the data, and which output format. The func
 
 Conventions (match the dataset):
 - daily step: rows are calendar dates. NWIS daily streamflow is the local calendar day; hourly products are aggregated
-  to the basin's local standard-time day; Daymet and gridMET are used as distributed (their daily precipitation matches
-  the 24 h starting near 12 UTC of the date best, see README); nldas_daily is the UTC day.
+  to the basin's local standard-time day; Daymet, gridMET and NLDAS-2 daily are used as given (one value per date).
 - hourly step: UTC, each row describes the hour that STARTS at its label. Hourly streamflow is the mean of all
   instantaneous readings in that hour; MRMS rates are averaged over it. AORC and NLDAS-2 (and the hourly PET computed
   from them) stamp each value at the END of its hour, so the toolkit moves them back one hour on reading.
@@ -733,13 +732,6 @@ def validate(cfg: dict) -> None:
                               'every basin would be dropped. Start the period in November 2014 or later, or keep gaps.')
             if a < pd.Timestamp('2001-10-01'):
                 warnings.warn('MRMS starts in 2002; earlier steps will be empty.')
-    if step == 'D' and 'nldas_daily' in cfg['forcing']:
-        warnings.warn('nldas_daily is aggregated over the UTC day (00-24 UTC), while the daily streamflow is the local '
-                      'calendar day (a 5-8 h shift). For a daily model prefer nldas_hourly, which the toolkit aggregates '
-                      "to each basin's local standard-time day.")
-    if step == 'D' and set(cfg.get('pet') or {}) & {'nldas_daily', 'nldas_hourly', 'aorc'}:
-        warnings.warn('daily PET from nldas_daily, nldas_hourly or aorc is summed over UTC days; daymet and gridmet PET '
-                      'follow local days.')
     for pr, ms in (cfg.get('pet') or {}).items():
         key = ('H' if step == 'S' else step, pr)
         if key not in PET or set(ms) - set(PET[key][2]):
@@ -805,7 +797,7 @@ def describe_products():
 # ------------------------------------------------------------------------------------------------------------------
 SOURCE = {'daymet': ('Daymet v4', '1 km', '1989-10 to 2025-09'),
           'gridmet': ('gridMET', '4 km', '1989-10 to 2025-09'),
-          'nldas_daily': ('NLDAS-2, summed over the UTC day', '12.5 km', '1989-10 to 2025-09'),
+          'nldas_daily': ('NLDAS-2', '12.5 km', '1989-10 to 2025-09'),
           'aorc': ('AORC v1.1', '1 km', '1989-10 to 2025-09'),
           'nldas_hourly': ('NLDAS-2', '12.5 km', '1989-10 to 2025-09'),
           'mrms': ('MRMS radar (2-5 min, averaged to the step)', '1 km', '2002 to 2025-09, gap 2012-01 to 2014-10')}

@@ -37,7 +37,7 @@ def workflow():
     steps = [
         ('The data', '995 urban basins\nWY1990-2025\nforcing, streamflow,\nPET, attributes\n(Zenodo archives)', GREY, None),
         ('1  Choose', 'basins (preset, IDs,\nstates, completeness,\narea, imperviousness)\ntime step and period\ninputs, target, attributes\ngaps, split, output', BLUE, 'CONFIG = dict(...)'),
-        ('2  Check', 'impossible combinations\nleakage warnings\nMRMS gap, UTC days\nsize estimate', BLUE, 'up.validate()'),
+        ('2  Check', 'impossible combinations\nleakage warnings\nMRMS gap, periods\nsize estimate', BLUE, 'up.validate()'),
         ('3  Build', 'every basin in parallel\none time axis\nshort input gaps filled\nquality rules\nstatic attributes', GREEN, 'up.build()'),
         ('4  Explore', 'maps, time series\nmonthly regime\nwater-year trends\ncorrelations at\nany time scale', ORANGE, 'up.plot_*()'),
         ('5  Split and write', 'temporal / spatial /\nk-fold split\nNeuralHydrology, numpy\narrays or CSV\nnorm. stats, manifest', PURPLE, 'up.write_package()'),
