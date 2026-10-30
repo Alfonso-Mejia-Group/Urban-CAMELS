@@ -46,7 +46,7 @@ Open **`Urban_CAMELS_data_prep.ipynb`** from this folder. Set `DATA_ROOT` in the
 the environment variable `UCAMELS_DATA`), edit the cells marked **EDIT**, then run all cells.
 
 Basins are read in parallel, so 4 to 8 CPU cores help. Memory depends on the build:
-- a daily build of the 247 benchmark basins needs well under 4 GB and runs in under a minute;
+- a daily build of all 995 basins (Daymet forcing, PET, imperviousness) needs about 1 GB and runs in under a minute on 4 cores;
 - an hourly build of about 500 basins over WY2008-2025 needs about 12 GB and takes about 3 minutes.
 
 ## Use from a script
@@ -58,7 +58,7 @@ import ucamels_prep as up
 CONFIG = dict(
     data_root='/path/to/Urban-CAMELS',
     resolution='daily', period=('1989-10-01', '2025-09-30'),
-    basins=dict(preset='benchmark_247'),
+    basins=dict(preset='all'),
     forcing={'daymet': ['prcp', 'tmax', 'tmin', 'srad', 'vp']}, pet={'daymet': ['pet_pt']},
     dynamic_attributes=['imperv'], target=dict(unit='mm'),
     static_attributes=dict(groups=['location_topography', 'soil', 'climate'], from_training_period=True),
@@ -87,8 +87,8 @@ After `up.build()`, the notebook draws the dataset you built, at your time step.
 | `up.plot_scatter(tables, x, y, freq=...)` | two variables against each other over all basins |
 
 Correlations are computed inside each basin and the median over basins is shown, so differences in climate or size
-between basins do not create correlation. The examples below are the 247 benchmark basins at the daily step, and one
-storm at the hourly step with MRMS radar precipitation.
+between basins do not create correlation. The examples below are all 995 basins at the daily step (basins without daily streamflow
+are left out of the streamflow statistics), and one storm at the hourly step with MRMS radar precipitation.
 
 ![Map of the selected basins](docs/images/example_map.png)
 ![Daily time series of one basin](docs/images/example_timeseries.png)

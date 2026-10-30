@@ -97,7 +97,7 @@ def layout():
 
 
 def examples(root):
-    cfg = dict(data_root=root, resolution='daily', period=('1989-10-01', '2025-09-30'), basins=dict(preset='benchmark_247'),
+    cfg = dict(data_root=root, resolution='daily', period=('1989-10-01', '2025-09-30'), basins=dict(preset='all'),
                forcing={'daymet': ['prcp', 'tmax', 'srad', 'vp']}, pet={'daymet': ['pet_pt']}, dynamic_attributes=['imperv'],
                target=dict(unit='mm'), static_attributes=dict(groups=['location_topography'], categorical='drop'),
                gap_fill=dict(max_steps=2, precip='zero'), qc=dict(max_target_missing_pct=100, drop_if_inputs_missing=True),
@@ -105,7 +105,7 @@ def examples(root):
                           test=('2010-10-01', '2025-09-30')), output=dict(dir='unused', format='csv'))
     basins = up.select_basins(cfg['basins'], verbose=False)
     tables, _, _ = up.build(cfg, basins)
-    ax = up.plot_map(basins, title='The 247 benchmark basins (complete daily record), coloured by imperviousness')
+    ax = up.plot_map(basins, title='The 995 Urban-CAMELS basins, coloured by imperviousness')
     ax.figure.savefig(IMG / 'example_map.png', dpi=DPI, bbox_inches='tight', facecolor='white')
     up.plot_timeseries(tables, '02336300', period=('2020-10-01', '2021-09-30')).savefig(
         IMG / 'example_timeseries.png', dpi=DPI, bbox_inches='tight', facecolor='white')
