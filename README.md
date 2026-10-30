@@ -50,13 +50,23 @@ Basins are read in parallel, so 4 to 8 CPU cores help. Memory depends on the bui
 - an hourly build of about 500 basins over WY2008-2025 needs about 12 GB and takes about 3 minutes.
 
 ## Interactive app
-The same choices as an app, with menus instead of code, a live map and checks, an animated map of urbanization,
-storm replays and zoomable time series. See [`marimo/README.md`](marimo/README.md):
+The same choices as an app, with menus instead of code, a live map and checks, an animated map of urbanization, a
+comparison of two basins, storm replays and zoomable time series. It runs on your computer with your copy of the data.
 
-    pip install marimo altair
-    marimo run marimo/urban_camels_app.py
+### Use the app from GitHub
+1. Get the code: `git clone https://github.com/Alfonso-Mejia-Group/Urban-CAMELS.git` (or **Code → Download ZIP** on
+   this page and unzip it), then `cd Urban-CAMELS`.
+2. Install Python packages: `pip install marimo altair pandas numpy xarray netCDF4 matplotlib`.
+3. Download the Urban-CAMELS archives from Zenodo and unzip them into one folder.
+4. Start the app: `marimo run marimo/urban_camels_app.py`. It opens in your browser (http://localhost:2718).
+5. Type your data folder in the first field (or set `UCAMELS_DATA` before step 4) and make your choices.
+
+`marimo edit marimo/urban_camels_app.py` opens the same app with its code. GitHub only shows the file; the app runs
+with Python on your computer, where the data are. More in [`marimo/README.md`](marimo/README.md).
 
 ![Urbanization 1989-2025](docs/images/app_urbanization.gif)
+
+![Two basins: location and imperviousness](docs/images/example_compare.png)
 
 ## Use from a script
 The notebook only fills one CONFIG dictionary and calls five functions:
@@ -94,6 +104,7 @@ After `up.build()`, the notebook draws the dataset you built, at your time step.
 | `up.plot_annual(tables)` | water-year means and their trend, including imperviousness and land cover |
 | `up.plot_correlation(tables, freq=...)` | correlation between variables at the built step, or weekly, monthly or annual |
 | `up.plot_scatter(tables, x, y, freq=...)` | two variables against each other over all basins |
+| `up.plot_imperviousness([sid1, sid2])` | where two basins are (arrows on the map) and their imperviousness, 1989-2025 |
 
 Correlations are computed inside each basin and the median over basins is shown, so differences in climate or size
 between basins do not create correlation. The examples below are all 995 basins at the daily step (basins without daily streamflow

@@ -164,6 +164,27 @@ def _(Path, alt, animation, basins, catalog, data_ok, data_root, mo, pd, plt, SE
 
 
 @app.cell(hide_code=True)
+def _(catalog, mo):
+    _labels = {f"{r.STAID} · {r.name.title()}": r.STAID for r in catalog.itertuples()}
+    _key = {v: k for k, v in _labels.items()}
+    compare_a = mo.ui.dropdown(_labels, value=_key.get("02334885"), searchable=True, label="Basin 1")
+    compare_b = mo.ui.dropdown(_labels, value=_key.get("02458450"), searchable=True, label="Basin 2")
+    return compare_a, compare_b
+
+
+@app.cell(hide_code=True)
+def _(compare_a, compare_b, data_ok, data_root, mo, plt, up):
+    mo.stop(not data_ok, mo.md(""))
+    plt.close("all")
+    _ids = [x for x in (compare_a.value, compare_b.value) if x]
+    mo.vstack([mo.md("## Compare two basins\nWhere they are, and how their imperviousness changed from 1989 to 2025. "
+                     "The defaults are a basin that urbanized fast and one that was already built out."),
+               mo.hstack([compare_a, compare_b], justify="start"),
+               up.plot_imperviousness(_ids, data_root.value) if _ids else mo.md("")])
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
     resolution = mo.ui.radio({"daily": "daily", "hourly": "hourly", "sub-hourly": "subhourly"}, value="daily",
                              label="Time step", inline=True)

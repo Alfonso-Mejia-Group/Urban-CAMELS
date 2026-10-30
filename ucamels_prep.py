@@ -947,9 +947,7 @@ def plot_map(basins: list[str] | None = None, color: str = 'IMPNLCD06', ax=None,
     sel = cat.loc[basins] if basins is not None else cat
     if ax is None:
         _, ax = plt.subplots(figsize=(11, 6))
-    o = pd.read_csv(TOOLKIT / 'catalog' / 'us_states_outline.csv')
-    ax.plot(o.lon, o.lat, color='#9a9a9a', lw=0.6, zorder=1)
-    ax.scatter(cat.lon, cat.lat, s=10, color='#d9d9d9', zorder=2, label=None)
+    _basemap(ax, cat)
     if color == 'megaregion':
         regs = sel.megaregion.value_counts().index
         cmap = plt.get_cmap('tab20')
@@ -965,10 +963,50 @@ def plot_map(basins: list[str] | None = None, color: str = 'IMPNLCD06', ax=None,
                         norm=norm, edgecolor='black', lw=0.3, zorder=3)
         cb = plt.colorbar(sc, ax=ax, shrink=0.75, pad=0.01)
         cb.set_label({'IMPNLCD06': 'Imperviousness, 2006 (%)', 'area_km2': 'Area (km²)'}.get(color, color))
-    ax.set_xlim(-125.5, -66.5); ax.set_ylim(24, 50); ax.set_aspect(1 / np.cos(np.radians(38)))
-    ax.set_axis_off()
     ax.set_title(title or f'{len(sel)} Urban-CAMELS basins' + (' (grey: all 995)' if len(sel) < len(cat) else ''))
     return ax
+
+
+def _basemap(ax, cat: pd.DataFrame):
+    """State outlines and all 995 gauges in grey, on a lon/lat frame without axes."""
+    o = pd.read_csv(TOOLKIT / 'catalog' / 'us_states_outline.csv')
+    ax.plot(o.lon, o.lat, color='#9a9a9a', lw=0.6, zorder=1)
+    ax.scatter(cat.lon, cat.lat, s=10, color='#d9d9d9', zorder=2)
+    ax.set_xlim(-125.5, -66.5); ax.set_ylim(24, 50); ax.set_aspect(1 / np.cos(np.radians(38)))
+    ax.set_axis_off()
+
+
+def plot_imperviousness(basins: list[str], root: str | None = None):
+    """Compare basins (two work best): where they are, with arrows on the map, and their annual imperviousness from
+    1989 to 2025. root: the data folder (default: UCAMELS_DATA)."""
+    plt = _plt()
+    imp = pd.read_csv(data_root({'data_root': root}) / 'attributes/annual/impervious_1989_2025.csv', dtype={'STAID': str})
+    w = imp[imp.STAID.isin(basins)].pivot(index='year', columns='STAID', values='imperv')
+    cat = load_catalog().set_index('STAID')
+    colors = ['#D55E00', '#0072B2', '#009E73', '#CC79A7']
+    offsets = [(-150, 105), (-290, -45), (-290, 60), (-150, -105)]     # labels to the upper and lower left (points)
+    fig = plt.figure(figsize=(14, 4.9))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1], wspace=0.12)
+    ax = fig.add_subplot(gs[0]); ts = fig.add_subplot(gs[1])
+    _basemap(ax, cat)
+    for k, sid in enumerate(basins):
+        c = colors[k % len(colors)]; lon, lat = cat.loc[sid, 'lon'], cat.loc[sid, 'lat']
+        a, b = w[sid].iloc[0], w[sid].iloc[-1]
+        ax.scatter([lon], [lat], s=120, color=c, edgecolor='black', lw=0.8, zorder=4)
+        ax.annotate(f'{_basin_name(sid)}\n{sid} · {a:.0f} % → {b:.0f} %', xy=(lon, lat),
+                    xytext=offsets[k % len(offsets)], textcoords='offset points', fontsize=11.5, color=c,
+                    fontweight='bold', zorder=5,
+                    bbox=dict(boxstyle='round,pad=0.35', fc='white', ec=c, lw=1.2),
+                    arrowprops=dict(arrowstyle='-|>', color=c, lw=1.8, mutation_scale=16, shrinkB=6,
+                                    connectionstyle='arc3,rad=0.15'))
+        ts.plot(w.index, w[sid], color=c, lw=2.6, marker='o', ms=3.5, label=f'{sid} ({b - a:+.1f} points)')
+        ts.annotate(f'{b:.1f} %', xy=(w.index[-1], b), xytext=(6, 0), textcoords='offset points', va='center',
+                    color=c, fontsize=11.5, fontweight='bold')
+    ax.set_title('Where the basins are')
+    ts.set_title('Imperviousness, 1989-2025'); ts.set_xlabel('Year'); ts.set_ylabel('Imperviousness (%)')
+    ts.set_xlim(w.index[0] - 1, w.index[-1] + 4); ts.grid(alpha=0.25, lw=0.5)
+    ts.legend(frameon=False, loc='best')
+    return fig
 
 
 def plot_timeseries(tables: dict, sid: str | None = None, variables: list[str] | None = None,

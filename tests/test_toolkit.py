@@ -250,8 +250,9 @@ try:
     figs = [up.plot_map(basins).figure, up.plot_map(color='megaregion').figure, up.plot_timeseries(sub, period=('2020-10-01', '2021-09-30')),
             up.plot_monthly(sub), up.plot_annual(sub, ['daymet__prcp', 'streamflow_mm', 'dyn__imperv']),
             up.plot_correlation(sub, ['daymet__prcp', 'daymet__tmax', 'pet__daymet__pet_pt', 'streamflow_mm'], freq='MS'),
-            up.plot_scatter(sub, 'daymet__prcp', 'streamflow_mm', freq='W', log=True)]
-    check(len(figs) == 7, '10. all explore plots draw (map, time series, monthly, annual, correlation, scatter)')
+            up.plot_scatter(sub, 'daymet__prcp', 'streamflow_mm', freq='W', log=True),
+            up.plot_imperviousness(['02334885', '02458450'], str(ROOT))]
+    check(len(figs) == 8, '10. all explore plots draw (map, time series, monthly, annual, correlation, scatter, imperviousness comparison)')
 except Exception as e:
     check(False, f'10. explore plots: {type(e).__name__}: {e}')
 plt.close('all')
