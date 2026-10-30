@@ -252,6 +252,8 @@ try:
             up.plot_correlation(sub, ['daymet__prcp', 'daymet__tmax', 'pet__daymet__pet_pt', 'streamflow_mm'], freq='MS'),
             up.plot_scatter(sub, 'daymet__prcp', 'streamflow_mm', freq='W', log=True),
             up.plot_imperviousness(['02334885', '02458450'], str(ROOT))]
+    gif = up.animate_urbanization(['02334885', '02458450'], str(ROOT), basins[:50])
+    check(gif[:6] in (b'GIF87a', b'GIF89a') and len(gif) > 10000, f'10. urbanization animation written ({len(gif) / 1e6:.2f} MB)')
     check(len(figs) == 8, '10. all explore plots draw (map, time series, monthly, annual, correlation, scatter, imperviousness comparison)')
 except Exception as e:
     check(False, f'10. explore plots: {type(e).__name__}: {e}')

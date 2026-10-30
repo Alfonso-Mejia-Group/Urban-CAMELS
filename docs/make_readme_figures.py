@@ -116,8 +116,7 @@ def examples(root):
     up.plot_correlation(tables, ['daymet__prcp', 'daymet__tmax', 'daymet__srad', 'daymet__vp', 'pet__daymet__pet_pt',
                                  'streamflow_mm'], freq='MS').savefig(IMG / 'example_correlation.png', dpi=DPI,
                                                                      bbox_inches='tight', facecolor='white')
-    up.plot_imperviousness(['02334885', '02458450'], root).savefig(IMG / 'example_compare.png', dpi=DPI,
-                                                                  bbox_inches='tight', facecolor='white')
+    up.animate_urbanization(['02334885', '02458450'], root, path=IMG / 'app_urbanization.gif')
     cfg_h = dict(cfg, resolution='hourly', period=('2021-08-12', '2021-08-16'), basins=dict(ids=['07165565']),
                  forcing={'mrms': ['prcp'], 'aorc': ['tair']}, pet={}, dynamic_attributes=[], gap_fill=dict(max_steps=0),
                  qc=dict(max_target_missing_pct=100, drop_if_inputs_missing=False))

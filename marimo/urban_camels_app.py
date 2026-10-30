@@ -110,78 +110,26 @@ def _(basins, comp_pct, comp_res, comp_window, imperv, area, megaregions, mo, pl
 
 
 @app.cell(hide_code=True)
-def _(Path, alt, animation, basins, catalog, data_ok, data_root, mo, pd, plt, SERIF, tempfile, up):
-    mo.stop(not data_ok or not basins, mo.md(""))
-    _imp = pd.read_csv(Path(data_root.value) / "attributes/annual/impervious_1989_2025.csv", dtype={"STAID": str})
-    _w = _imp[_imp.STAID.isin(basins)].pivot(index="STAID", columns="year", values="imperv")
-    _cat = catalog.set_index("STAID").loc[_w.index]
-    _years = list(_w.columns)
-    _vmax = float(_w.max().max())
-
-    def _gif():
-        _fig, _ax = plt.subplots(figsize=(9, 4.3), dpi=90)
-        up.plot_map(list(_w.index), ax=_ax)
-        for _c in list(_ax.collections)[1:]:
-            _c.remove()
-        for _cb in _fig.axes[1:]:
-            _cb.remove()
-        _ax.set_position([0.0, 0.0, 0.87, 0.91])
-        _sc = _ax.scatter(_cat.lon, _cat.lat, c=_w[_years[0]], s=46, cmap="Reds", vmin=0, vmax=_vmax,
-                          edgecolor="black", lw=0.3, zorder=3)
-        _cbar = _fig.colorbar(_sc, cax=_fig.add_axes([0.88, 0.12, 0.022, 0.72]))
-        _cbar.set_label("Imperviousness (%)")
-        _title = _ax.set_title("")
-        _yr = _ax.text(0.02, 0.06, "", transform=_ax.transAxes, fontsize=28, fontweight="bold", color="#7F0000")
-
-        def _frame(i):
-            _sc.set_array(_w[_years[i]].values)
-            _title.set_text(f"Imperviousness of {len(_w)} basins, 1989-2025")
-            _yr.set_text(str(_years[i]))
-            return _sc, _yr
-
-        _anim = animation.FuncAnimation(_fig, _frame, frames=len(_years), interval=250)
-        _f = Path(tempfile.mkstemp(suffix=".gif")[1])
-        _anim.save(_f, writer=animation.PillowWriter(fps=5))
-        plt.close(_fig)
-        _data = _f.read_bytes(); _f.unlink()
-        return _data
-
-    urban_gif = _gif()
-    _q = _w.quantile([0.25, 0.5, 0.75]).T.reset_index().rename(columns={0.25: "q25", 0.5: "median", 0.75: "q75"})
-    _band = alt.Chart(_q).mark_area(opacity=0.25, color="#C0392B").encode(
-        x=alt.X("year:Q", title="Year", axis=alt.Axis(format="d")), y=alt.Y("q25:Q", title="Imperviousness (%)"), y2="q75:Q")
-    _line = alt.Chart(_q).mark_line(color="#7F0000", strokeWidth=3, point=True).encode(
-        x="year:Q", y="median:Q", tooltip=[alt.Tooltip("year:Q", format="d"), alt.Tooltip("median:Q", format=".2f", title="median (%)"),
-                                           alt.Tooltip("q25:Q", format=".2f", title="25 %"), alt.Tooltip("q75:Q", format=".2f", title="75 %")])
-    _trend = (_band + _line).properties(width=330, height=300, title="Median and middle half of the basins").configure(
-        font=SERIF).configure_title(fontSize=15, anchor="start")
-    _grew = int((_w[_years[-1]] - _w[_years[0]] > 1).sum())
-    mo.vstack([mo.md(f"## Urbanization, 1989 to 2025\nImperviousness rose by more than 1 percentage point in "
-                     f"**{_grew} of {len(_w)}** selected basins; median {_w[_years[0]].median():.1f} % in 1989, "
-                     f"{_w[_years[-1]].median():.1f} % in 2025."),
-               mo.hstack([mo.image(urban_gif), _trend], align="center", widths=[1.6, 1])])
-    return (urban_gif,)
-
-
-@app.cell(hide_code=True)
 def _(catalog, mo):
     _labels = {f"{r.STAID} · {r.name.title()}": r.STAID for r in catalog.itertuples()}
     _key = {v: k for k, v in _labels.items()}
-    compare_a = mo.ui.dropdown(_labels, value=_key.get("02334885"), searchable=True, label="Basin 1")
-    compare_b = mo.ui.dropdown(_labels, value=_key.get("02458450"), searchable=True, label="Basin 2")
+    compare_a = mo.ui.dropdown(_labels, value=_key.get("02334885"), searchable=True, label="Highlight basin 1")
+    compare_b = mo.ui.dropdown(_labels, value=_key.get("02458450"), searchable=True, label="Highlight basin 2")
     return compare_a, compare_b
 
 
 @app.cell(hide_code=True)
-def _(compare_a, compare_b, data_ok, data_root, mo, plt, up):
-    mo.stop(not data_ok, mo.md(""))
-    plt.close("all")
-    _ids = [x for x in (compare_a.value, compare_b.value) if x]
-    mo.vstack([mo.md("## Compare two basins\nWhere they are, and how their imperviousness changed from 1989 to 2025. "
-                     "The defaults are a basin that urbanized fast and one that was already built out."),
-               mo.hstack([compare_a, compare_b], justify="start"),
-               up.plot_imperviousness(_ids, data_root.value) if _ids else mo.md("")])
-    return
+def _(basins, compare_a, compare_b, data_ok, data_root, mo, up):
+    mo.stop(not data_ok or not basins, mo.md(""))
+    _hl = [x for x in (compare_a.value, compare_b.value) if x]
+    with mo.status.spinner(title="Drawing the animation ..."):
+        urban_gif = up.animate_urbanization(_hl, data_root.value, basins)
+    mo.vstack([mo.md("## Urbanization, 1989 to 2025\nEach frame is one year: the map colours every selected basin by its "
+                     "imperviousness (Annual NLCD, catchment mean), and the panels follow the two highlighted basins: "
+                     "imperviousness, water-year precipitation (Daymet) and water-year streamflow. The defaults are a "
+                     "basin that urbanized fast and one that was already built out."),
+               mo.hstack([compare_a, compare_b], justify="start"), mo.image(urban_gif)])
+    return (urban_gif,)
 
 
 @app.cell(hide_code=True)

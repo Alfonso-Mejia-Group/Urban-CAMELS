@@ -31,8 +31,7 @@ On a remote computer or cluster, start the app on the compute node and open the 
 | Section | |
 |---|---|
 | Basins | start from all 995 or the 247 benchmark basins; filter by state, megaregion, imperviousness, area and streamflow completeness; live map |
-| Urbanization | animated map of imperviousness from 1989 to 2025 for the selected basins, with the median and middle half |
-| Compare two basins | arrows to two basins on the map and their imperviousness, 1989-2025 (default: one urbanizing fast, one built out) |
+| Urbanization | animation, one frame per year 1989-2025: the selected basins coloured by imperviousness, and two highlighted basins (arrows) with their imperviousness, precipitation and streamflow drawn year by year |
 | Time step, inputs, target | daily, hourly or sub-hourly; only the products and PET valid for the step are offered |
 | Attributes, gaps, split, output | static groups, gap filling, quality rules, temporal / spatial / k-fold split, NeuralHydrology, arrays or CSV |
 | Check | errors and warnings appear as you choose; **Build** is enabled when the choices are valid |
@@ -42,4 +41,3 @@ On a remote computer or cluster, start the app on the compute node and open the 
 
 ![Urbanization 1989-2025](../docs/images/app_urbanization.gif)
 ![Storm replay, hourly](../docs/images/app_storm_replay.gif)
-![Two basins: location and imperviousness](../docs/images/example_compare.png)
