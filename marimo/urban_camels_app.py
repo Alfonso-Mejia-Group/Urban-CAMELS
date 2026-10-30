@@ -125,8 +125,8 @@ def _(basins, compare_a, compare_b, data_ok, data_root, mo, up):
     with mo.status.spinner(title="Drawing the animation ..."):
         urban_gif = up.animate_urbanization(_hl, data_root.value, basins)
     mo.vstack([mo.md("## Urbanization, 1989 to 2025\nEach frame is one year: the map colours every selected basin by its "
-                     "imperviousness (Annual NLCD, catchment mean), and the panels follow the two highlighted basins: "
-                     "imperviousness, water-year precipitation (Daymet) and water-year streamflow. The defaults are a "
+                     "imperviousness (Annual NLCD, catchment mean), and the time series follows the imperviousness of the two "
+                     "highlighted basins. The defaults are a "
                      "basin that urbanized fast and one that was already built out."),
                mo.hstack([compare_a, compare_b], justify="start"), mo.image(urban_gif)])
     return (urban_gif,)

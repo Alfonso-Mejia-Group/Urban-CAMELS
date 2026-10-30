@@ -1158,8 +1158,8 @@ def plot_scatter(tables: dict, x: str, y: str, freq: str | None = None, log: boo
 def animate_urbanization(highlight: list[str], root: str | None = None, basins: list[str] | None = None,
                          path: str | Path | None = None, fps: int = 4) -> bytes:
     """Animated GIF, one frame per year 1989-2025. Left: the basins (all 995 if None) coloured by that year's
-    imperviousness, with arrows to the `highlight` basins (two work best). Right: for the highlighted basins, the
-    annual imperviousness, the water-year precipitation (Daymet) and the water-year streamflow, drawn up to that year.
+    imperviousness, with arrows to the `highlight` basins (two work best). Right: the annual imperviousness of the
+    highlighted basins, drawn up to that year.
     Returns the GIF bytes and also writes them to `path` if given. root: the data folder (default: UCAMELS_DATA)."""
     plt = _plt()
     from matplotlib import animation
@@ -1170,23 +1170,11 @@ def animate_urbanization(highlight: list[str], root: str | None = None, basins: 
     imp = pd.read_csv(r / 'attributes/annual/impervious_1989_2025.csv', dtype={'STAID': str})
     w = imp[imp.STAID.isin(set(sel) | set(highlight))].pivot(index='STAID', columns='year', values='imperv')
     years = list(w.columns)
-    P, Q = {}, {}
-    for sid in highlight:                                       # water-year totals, mm; streamflow needs 90 % of days
-        p = _read(r / PRODUCTS['daymet']['file'].format(s=sid), 'date', ['prcp'])['prcp']
-        P[sid] = p.groupby(_water_year(p.index)).sum(min_count=330)
-        fq = r / TARGET['D'][0].format(s=sid)
-        if fq.exists():
-            q = _read(fq, 'date', [TARGET['D'][2]])[TARGET['D'][2]]
-            q = q.where(q >= 0) * CFS_TO_CMS * 86400 / (cat.loc[sid, 'area_km2'] * 1e6) * 1000
-            g = q.groupby(_water_year(q.index))
-            Q[sid] = g.sum().where(g.count() >= 329)
-        else:
-            Q[sid] = pd.Series(dtype=float)
     colors = ['#D55E00', '#0072B2', '#009E73', '#CC79A7']
     offsets = [(-150, 105), (-290, -45), (-290, 60), (-150, -105)]
     fig = plt.figure(figsize=(15, 6.0), dpi=80)
     ax = fig.add_axes([0.0, 0.03, 0.56, 0.86]); cax = fig.add_axes([0.565, 0.17, 0.011, 0.58])
-    tsx = [fig.add_axes([0.675, y, 0.305, 0.235]) for y in (0.69, 0.40, 0.11)]
+    tsx = [fig.add_axes([0.675, 0.14, 0.305, 0.72])]
     _basemap(ax, cat)
     pts = w.loc[sel]
     vmax = float(w.max().max())
@@ -1204,24 +1192,21 @@ def animate_urbanization(highlight: list[str], root: str | None = None, basins: 
                                     connectionstyle='arc3,rad=0.15'))
     ax.set_title(f'Imperviousness of {len(pts)} basins')
     yr = ax.text(0.02, 0.05, '', transform=ax.transAxes, fontsize=30, fontweight='bold', color='#7F0000')
-    series = [('Imperviousness (%)', {s: w.loc[s] for s in highlight}),
-              ('Precipitation (mm/yr)', P), ('Streamflow (mm/yr)', Q)]
+    series = [('Imperviousness (%)', {s: w.loc[s] for s in highlight})]
     lines = []
     for a, (lab, d) in zip(tsx, series):
         vals = pd.concat([v for v in d.values() if len(v)]) if any(len(v) for v in d.values()) else pd.Series([0.0, 1.0])
         a.set_xlim(years[0] - 0.5, years[-1] + 0.5); lo, hi = float(vals.min()), float(vals.max())
         a.set_ylim(lo - 0.08 * (hi - lo + 1e-9), hi + 0.12 * (hi - lo + 1e-9))
-        a.set_ylabel(lab.replace(' (', '\n('), fontsize=11.5); a.grid(alpha=0.25, lw=0.5)
+        a.set_ylabel(lab); a.grid(alpha=0.25, lw=0.5)
         row = []
         for k, sid in enumerate(highlight):
             (ln,) = a.plot([], [], color=colors[k % 4], lw=2.4)
             (dt,) = a.plot([], [], 'o', color=colors[k % 4], ms=6)
             row.append((ln, dt, d.get(sid, pd.Series(dtype=float))))
         lines.append(row)
-    for a in tsx[:-1]:
-        a.tick_params(labelbottom=False)
-    tsx[-1].set_xlabel('Year (water year for precipitation and streamflow)')
-    tsx[0].set_title('The highlighted basins, year by year')
+    tsx[0].set_xlabel('Year')
+    tsx[0].set_title('Imperviousness of the highlighted basins')
     tsx[0].legend([row[0] for row in lines[0]], highlight, frameon=False, fontsize=10.5, loc='lower right', ncol=1)
 
     def frame(i):

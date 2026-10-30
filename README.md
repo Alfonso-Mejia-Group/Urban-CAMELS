@@ -103,7 +103,7 @@ After `up.build()`, the notebook draws the dataset you built, at your time step.
 | `up.plot_correlation(tables, freq=...)` | correlation between variables at the built step, or weekly, monthly or annual |
 | `up.plot_scatter(tables, x, y, freq=...)` | two variables against each other over all basins |
 | `up.plot_imperviousness([sid1, sid2])` | where two basins are (arrows on the map) and their imperviousness, 1989-2025 |
-| `up.animate_urbanization([sid1, sid2])` | animated GIF, one frame per year: the map of imperviousness and, for the two basins, imperviousness, precipitation and streamflow |
+| `up.animate_urbanization([sid1, sid2])` | animated GIF, one frame per year: the map of imperviousness and the imperviousness of the two basins |
 
 Correlations are computed inside each basin and the median over basins is shown, so differences in climate or size
 between basins do not create correlation. The examples below are all 995 basins at the daily step (basins without daily streamflow
