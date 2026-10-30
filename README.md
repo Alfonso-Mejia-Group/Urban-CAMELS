@@ -146,8 +146,6 @@ ranges. There are no duplicate or unsorted time stamps and no impossible forcing
 
 | Feature | Handling |
 |---|---|
-| **Negative hourly streamflow in 34 tidal or lake-affected gauges** (e.g. Cedar River at Jacksonville, Milwaukee River at mouth) | flag `negative_hourly_q`; negative values become NaN in the target |
-| **No daily streamflow in 86 basins** (53 have no daily record, 33 have a daily file without values) | their target is all NaN; `qc.max_target_missing_pct` drops them |
 | **Daymet leaves 31 December of leap years empty** (9 days) | filled when `gap_fill.max_steps >= 1` |
 | **AORC misses whole days**: 18 June 2024 everywhere, plus a few regional multi-day gaps (e.g. 7-11 July 2007); hourly AORC PET omits the same hours | short gaps are filled; longer ones stay NaN and are reported (or drop the basin) |
 | **MRMS has no data from January 2012 to October 2014** | the toolkit warns when the period overlaps |
