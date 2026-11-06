@@ -261,6 +261,15 @@ plt.close('all')
 c = up.correlation(sub, ['daymet__prcp', 'streamflow_mm'], freq='MS')
 check(c.shape == (2, 2) and np.allclose(np.diag(c), 1) and -1 <= c.iloc[0, 1] <= 1, f'10. monthly correlation P-Q = {c.iloc[0, 1]:.2f}')
 
+# SSURGO soil attributes: every basin, HSG shares sum to 1, texture to 100, values equal the attribute file
+ss = up.static_attributes(dict(cfg, static_attributes=dict(groups=['soil_ssurgo'], fill='none')), up.select_basins(dict(preset='all'), verbose=False))
+raw = pd.read_csv(ROOT / 'attributes/soil_ssurgo_attributes.csv', dtype={'STAID': str}).set_index('STAID')
+hs = ss[[c for c in ss if c.startswith('hsg_')]].sum(axis=1)
+tx = ss[['sand_frac_ssurgo', 'silt_frac_ssurgo', 'clay_frac_ssurgo']].sum(axis=1)
+check(ss.shape == (995, 17) and ss.notna().all().all() and np.allclose(hs, 1, atol=0.005) and np.allclose(tx, 100, atol=0.01)
+      and np.allclose(ss.values, raw.loc[ss.index, ss.columns].values),
+      f'11. SSURGO soil group: 995 basins x {ss.shape[1]} attributes, HSG shares sum to 1, texture to 100 %, equal to the file')
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\n{n_pass} passed, {n_fail} failed')
 print('ALL PASSED' if ok else 'SOME TESTS FAILED')

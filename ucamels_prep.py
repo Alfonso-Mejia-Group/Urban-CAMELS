@@ -86,11 +86,16 @@ DYNAMIC = {  # annual (calendar-year) attributes: name -> (file, column, unit)
     'pop_density': ('population_1989_2025.csv', 'pop_density', 'persons/km2'),
     'housing_density': ('housing_1990_2020.csv', 'housing_density', 'units/km2'),   # census years only
 }
-# static attribute groups (columns of attributes/static_attributes.csv)
+# static attribute groups (columns of attributes/static_attributes.csv, the dam and levee tables and
+# soil_ssurgo_attributes.csv)
 STATIC_GROUPS = {
     'location_topography': ['lat', 'lon', 'elev_mean', 'slope_mean', 'area_gages2'],
     'soil': ['soil_depth_statsgo', 'soil_depth_pelletier', 'soil_porosity', 'soil_conductivity', 'max_water_content',
              'sand_frac', 'silt_frac', 'clay_frac'],
+    'soil_ssurgo': ['sand_frac_ssurgo', 'silt_frac_ssurgo', 'clay_frac_ssurgo', 'soil_conductivity_ssurgo',
+                    'organic_frac_ssurgo', 'aws_0_150_ssurgo', 'restrictive_100cm_frac_ssurgo', 'hsg_A_frac', 'hsg_B_frac',
+                    'hsg_C_frac', 'hsg_D_frac', 'hsg_dual_frac', 'hsg_none_frac', 'urban_land_frac_ssurgo',
+                    'disturbed_soil_frac_ssurgo', 'soil_data_frac_ssurgo', 'ssurgo_coverage'],
     'geology': ['carbonate_rocks_frac', 'geol_porosity', 'geol_permeability', 'glim_1st_class_frac',
                 'glim_2nd_class_frac', 'geol_carbonate_dom'],
     'geology_categorical': ['glim_1st_code', 'geol_2nd_class', 'geol_lithology_class'],
@@ -437,10 +442,12 @@ _STATIC: dict = {}
 
 
 def _static_table(root: Path) -> pd.DataFrame:
-    """Static attributes of all 995 basins, with the dam and levee attributes joined."""
+    """Static attributes of all 995 basins, with the dam, levee and SSURGO soil attributes joined."""
     if root not in _STATIC:
         s = pd.read_csv(root / 'attributes/static_attributes.csv', dtype={'STAID': str}).set_index('STAID')
-        for sub in ('dam_attributes.csv', 'levee_attributes.csv'):
+        for sub in ('dam_attributes.csv', 'levee_attributes.csv', 'soil_ssurgo_attributes.csv'):
+            if not (root / 'attributes' / sub).exists():
+                continue
             d = pd.read_csv(root / 'attributes' / sub, dtype={'STAID': str}).set_index('STAID')
             s = s.join(d.drop(columns=[c for c in d.columns if c in s or c == 'basin_area_km2']), how='left')
         _STATIC[root] = s

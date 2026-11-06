@@ -138,7 +138,7 @@ are left out of the streamflow statistics), and one storm at the hourly step wit
 | PET | Priestley-Taylor and Penman-Monteith from each forcing product |
 | Dynamic attributes | annual imperviousness, 6 land-cover classes and population density, plus housing density (census years 1990-2020, held or interpolated) |
 | Target | observed streamflow: mm per step, mm/h, m³/s or ft³/s; missing values stay NaN |
-| Static attributes | groups: topography, soil, geology (numeric and categorical), vegetation, climate, hydrologic signatures, dams, levees. Climate attributes and signatures can be recomputed over the training years only |
+| Static attributes | groups: topography, soil (STATSGO, as in CAMELS), soil_ssurgo (SSURGO, finer scale), geology (numeric and categorical), vegetation, climate, hydrologic signatures, dams, levees. Climate attributes and signatures can be recomputed over the training years only |
 | Gaps | inputs only; short gaps filled (precipitation with zeros or linearly, others linearly); a basin is dropped by rule |
 | Split | `temporal`, `spatial` (random or stratified), `spatial_kfold`, `temporal_spatial` |
 | Output | `neuralhydrology` (netCDF per basin, attributes, basin files, starting config), `arrays` (numpy, written to disk), `csv` |
@@ -162,6 +162,8 @@ ranges. There are no duplicate or unsorted time stamps and no impossible forcing
 | **Streamflow signatures describe the observed flow** | leakage warnings; recompute them over the training years, and never use them for held-out basins |
 
 Units of three static attributes: `slope_mean` m km⁻¹, `soil_conductivity` cm h⁻¹, `max_water_content` m.
+The SSURGO soil attributes (`soil_ssurgo`) are described in `attributes/soil_ssurgo_README.md`; in urban basins check
+`soil_data_frac_ssurgo` and `urban_land_frac_ssurgo`, the share of the basin with soil data and mapped as urban land.
 
 ## Time conventions
 | Series | Time stamp in the files | What the toolkit does |
