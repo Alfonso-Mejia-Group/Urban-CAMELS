@@ -266,7 +266,7 @@ ss = up.static_attributes(dict(cfg, static_attributes=dict(groups=['soil_ssurgo'
 raw = pd.read_csv(ROOT / 'attributes/soil_ssurgo_attributes.csv', dtype={'STAID': str}).set_index('STAID')
 hs = ss[[c for c in ss if c.startswith('hsg_')]].sum(axis=1)
 tx = ss[['sand_frac_ssurgo', 'silt_frac_ssurgo', 'clay_frac_ssurgo']].sum(axis=1)
-check(ss.shape == (995, 17) and ss.notna().all().all() and np.allclose(hs, 1, atol=0.005) and np.allclose(tx, 100, atol=0.01)
+check(ss.shape == (995, 19) and ss.notna().all().all() and np.allclose(hs, 1, atol=0.005) and np.allclose(tx, 100, atol=0.01)
       and np.allclose(ss.values, raw.loc[ss.index, ss.columns].values),
       f'11. SSURGO soil group: 995 basins x {ss.shape[1]} attributes, HSG shares sum to 1, texture to 100 %, equal to the file')
 
