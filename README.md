@@ -175,3 +175,7 @@ The SSURGO soil attributes (`soil_ssurgo`) are described in `attributes/soil_ssu
 | MRMS | UTC, instantaneous rates every 2-5 min | averaged over each step, labelled by its start |
 | Daymet, gridMET, NLDAS-2 daily | the date | used as is |
 
+
+## License
+The code in this repository is released under the MIT License (see `LICENSE`). The Urban-CAMELS data are released
+on Zenodo (https://doi.org/10.5281/zenodo.23741513) under the Creative Commons Attribution 4.0 International (CC BY 4.0) license.
